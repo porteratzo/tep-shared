@@ -1,0 +1,12 @@
+plc:
+  type: ${PLC_TYPE:mock}
+  modbus:
+    ip: ${MODBUS_IP:127.0.0.1}
+    port: ${MODBUS_PORT:502}
+    unit_id: ${MODBUS_UNIT_ID:1}
+    tag: ${MODBUS_TAG:holding:0}
+  mock:
+    default_value: PASS
+    flag_map:
+      PASS: normal
+      FAIL: anomaly

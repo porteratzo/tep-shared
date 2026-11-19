@@ -1,0 +1,15 @@
+redis:
+  host: ${REDIS_HOST:localhost}
+  port: ${REDIS_PORT:6379}
+  db: ${REDIS_DB:0}
+  password: ${REDIS_PASSWORD:}
+  max_connections: 50
+  socket_timeout: 5
+  socket_connect_timeout: 5
+  streams:
+    camera_frames:
+      name: camera_frames
+      maxlen: 100
+      consumer_group: frames_group
+      block_ms: 1000
+      count: 10

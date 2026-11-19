@@ -1,0 +1,100 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tep-shared"
+version = "0.1.0"
+description = "Small shared utilities: hierarchical config loading, logging, HTTP and wire helpers"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{name = "porteratzo"}]
+requires-python = ">=3.12"
+# Core only: ConfigLoader (YAML + env) needs these two. Everything else is an extra, so a library that
+# only wants config/logging/reconnect installs nothing more.
+dependencies = [
+    "omegaconf>=2.3.0",
+    "python-dotenv>=1.0.0",
+]
+classifiers = [
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+]
+
+[project.optional-dependencies]
+# shared.core.api_response, shared.core.auth (and the Flask hooks in shared.core.log_setup)
+flask = ["flask>=3.0.0"]
+# shared.core.db (make_engine, session_scope)
+db = ["sqlalchemy>=2.0.23"]
+# shared.camera_service (CameraServiceClient)
+redis = ["redis>=5.0.0"]
+dev = [
+    "tep-shared[flask,db,redis]",
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "flake8>=6.0.0",
+    "mypy>=1.0.0",
+    "isort>=5.0.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.isort]
+profile = "black"
+line_length = 110
+multi_line_output = 3
+include_trailing_comma = true
+use_parentheses = true
+ensure_newline_before_comments = true
+skip_gitignore = true
+skip = [
+    ".eggs",
+    ".git",
+    ".mypy_cache",
+    ".tox",
+    ".venv",
+    "_build",
+    "build",
+    "dist",
+    "__pycache__",
+]
+known_first_party = ["shared"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+follow_imports = "silent"
+check_untyped_defs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+exclude = ["build/", "dist/", "__pycache__/", ".venv/"]
+
+[project.urls]
+Repository = "https://github.com/porteratzo/tep-shared"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["unit: fast, hermetic unit tests"]
+
+[tool.black]
+line-length = 110
+target-version = ["py312"]
+
+[tool.flake8]
+max-line-length = 110
+extend-ignore = [
+    "E203",  # whitespace before ':' — conflicts with black
+    "W503",  # line break before binary operator — conflicts with black
+]
+exclude = [".git", "__pycache__", "build", "dist", ".venv", "*.egg-info"]
+
+[tool.coverage.run]
+source = ["src/shared"]
+data_file = "build/coverage/.coverage"
+
+[tool.coverage.report]
+fail_under = 80

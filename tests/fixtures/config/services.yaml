@@ -1,0 +1,9 @@
+services:
+  ai_service:
+    url: ${AI_SERVICE_URL:http://localhost:8081}
+
+# Deliberately weak, obviously-fake placeholders: these tests exercise warn_insecure_defaults().
+auth:
+  maintenance_password: ${MAINTENANCE_PASSWORD:maintenance}
+  admin_password: ${ADMIN_PASSWORD:admin}
+  secret_key: ${SECRET_KEY:change-this-key-in-production}

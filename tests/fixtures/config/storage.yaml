@@ -1,0 +1,4 @@
+storage:
+  base_dir: ${DATA_DIR:data}
+  images:
+    camera_frames: ${CAMERA_FRAMES_DIR:data/images/camera_frames}
