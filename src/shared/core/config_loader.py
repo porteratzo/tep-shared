@@ -329,7 +329,11 @@ class ConfigLoader:
         deprecation warning; remove the alias once no deployed ``services.yaml`` uses it.
         """
         legacy = _LEGACY_SERVICE_KEYS.get(service_name)
-        if legacy and self.get(f"services.{service_name}") is None and self.get(f"services.{legacy}") is not None:
+        if (
+            legacy
+            and self.get(f"services.{service_name}") is None
+            and self.get(f"services.{legacy}") is not None
+        ):
             logger.warning(
                 "Config section services.%s is deprecated; rename it to services.%s", legacy, service_name
             )

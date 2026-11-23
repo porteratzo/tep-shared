@@ -352,7 +352,9 @@ def test_service_key_is_the_identity_for_other_services(config_dir: Path, dotenv
 def test_legacy_pipeline_maker_env_vars_are_still_honoured(
     config_dir: Path, dotenv_file: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    _write(config_dir, "services.yaml", "services:\n  pipeline_editor:\n    port: ${PIPELINE_EDITOR_PORT:5005}\n")
+    _write(
+        config_dir, "services.yaml", "services:\n  pipeline_editor:\n    port: ${PIPELINE_EDITOR_PORT:5005}\n"
+    )
     monkeypatch.delenv("PIPELINE_EDITOR_PORT", raising=False)
     monkeypatch.setenv("PIPELINE_MAKER_PORT", "6001")
     with caplog.at_level("WARNING", logger="shared.core.config_loader"):
