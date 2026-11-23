@@ -42,6 +42,10 @@ _INSECURE_DEFAULTS = {
 }
 
 
+# COMPAT(D-E4-5): renamed service sections, new name -> old name (see ConfigLoader.service_key).
+_LEGACY_SERVICE_KEYS = {"pipeline_editor": "pipeline_maker"}
+
+
 class ConfigError(RuntimeError):
     """A required configuration value is missing."""
 
@@ -122,6 +126,10 @@ def _quote_env_value(value: str) -> str:
     return json.dumps(escaped)
 
 
+# COMPAT(D-E4-5): renamed env vars, new name -> old name; the old one is honoured with a warning.
+_LEGACY_ENV_VARS = {f"PIPELINE_EDITOR_{k}": f"PIPELINE_MAKER_{k}" for k in ("HOST", "PORT", "URL", "DEBUG")}
+
+
 def _substitute_env_vars(content: str) -> str:
     """Replace ``${VAR_NAME:default}`` env-var interpolations with resolved values.
 
@@ -139,6 +147,11 @@ def _substitute_env_vars(content: str) -> str:
 
     def _replace(m: re.Match) -> str:
         env_value = os.getenv(m.group(1))
+        if env_value is None and m.group(1) in _LEGACY_ENV_VARS:
+            legacy = _LEGACY_ENV_VARS[m.group(1)]
+            env_value = os.getenv(legacy)
+            if env_value is not None:
+                logger.warning("Environment variable %s is deprecated; use %s", legacy, m.group(1))
         if env_value is None:
             return m.group(2)
         return _quote_env_value(env_value)
@@ -229,7 +242,12 @@ class ConfigLoader:
             default: Default value if key not found
 
         Returns:
-            Configuration value or default
+            Configuration value, or ``default`` when the key is absent.
+
+        Raises:
+            ConfigError: the key exists but resolving it fails (e.g. a broken
+                ``${...}`` interpolation). Returning ``default`` there would silently
+                replace a configured value with the caller's fallback (D-SH2).
         """
         if self._config is None:
             self.load()
@@ -238,8 +256,7 @@ class ConfigLoader:
         try:
             return OmegaConf.select(self._config, key, default=default)
         except Exception as e:
-            logger.warning("Config lookup failed for key %r: %s", key, e)
-            return default
+            raise ConfigError(f"Config lookup failed for key {key!r}: {e}") from e
 
     def get_database_url(self) -> str:
         """Get database URL.
@@ -294,6 +311,7 @@ class ConfigLoader:
         Returns:
             Service URL
         """
+        service_name = self.service_key(service_name)
         url: Optional[str] = self.get(f"services.{service_name}.url")
         if url:
             return url
@@ -302,6 +320,21 @@ class ConfigLoader:
         host: str = str(self.get(f"services.{service_name}.host", "localhost"))
         port: int = int(self.get(f"services.{service_name}.port", 8080))
         return f"http://{host}:{port}"
+
+    def service_key(self, service_name: str) -> str:
+        """Return the ``services.<key>`` section name to read for ``service_name``.
+
+        COMPAT(D-E4-5): the pipeline editor's section was renamed ``pipeline_maker`` ->
+        ``pipeline_editor``. A config that still has only the old section keeps working, with a
+        deprecation warning; remove the alias once no deployed ``services.yaml`` uses it.
+        """
+        legacy = _LEGACY_SERVICE_KEYS.get(service_name)
+        if legacy and self.get(f"services.{service_name}") is None and self.get(f"services.{legacy}") is not None:
+            logger.warning(
+                "Config section services.%s is deprecated; rename it to services.%s", legacy, service_name
+            )
+            return legacy
+        return service_name
 
     def get_storage_path(self, path_type: str) -> Path:
         """

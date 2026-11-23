@@ -12,7 +12,6 @@ uses a ``${VAR:default}`` placeholder (there is no generic env override), and wh
 same key the later one in the loader's fixed file order wins.
 """
 
-import logging
 from pathlib import Path
 from typing import Any, Optional
 
@@ -20,7 +19,7 @@ import pytest
 from dotenv.main import load_dotenv as real_load_dotenv
 
 from shared.core import config_loader
-from shared.core.config_loader import ConfigLoader
+from shared.core.config_loader import ConfigError, ConfigLoader
 
 pytestmark = pytest.mark.unit
 
@@ -195,19 +194,20 @@ def test_missing_directory_or_files_give_an_empty_config_and_defaults(
 
 
 # ---------------------------------------------------------------------------
-# get(): lookup failure is a default plus a warning, never an exception
+# get(): a missing key gives the default; a key that exists but cannot be resolved raises
+# (D-SH2: a silent fallback hid SH-B3, a downgrade to a public key)
 # ---------------------------------------------------------------------------
 
 
-def test_a_broken_interpolation_returns_the_default_and_logs_a_warning(
-    config_dir: Path, dotenv_file: Path, caplog: pytest.LogCaptureFixture
+def test_a_broken_interpolation_raises_config_error_naming_the_key(
+    config_dir: Path, dotenv_file: Path
 ) -> None:
     _write(config_dir, "services.yaml", "a: ${missing_key}\nok: 1\n")
     cfg = _loader(config_dir)
-    with caplog.at_level(logging.WARNING, logger="shared.core.config_loader"):
-        assert cfg.get("a", "fallback") == "fallback"
-    assert any("Config lookup failed" in r.getMessage() and "'a'" in r.getMessage() for r in caplog.records)
+    with pytest.raises(ConfigError, match="'a'"):
+        cfg.get("a", "fallback")
     assert cfg.get("ok") == 1  # one bad key does not poison the rest
+    assert cfg.get("not.there", "fallback") == "fallback"  # missing keys still default
 
 
 # ---------------------------------------------------------------------------
@@ -322,3 +322,41 @@ def test_unconfigured_storage_key_falls_back_to_a_data_subdirectory_named_after_
         for p in (path, path.parent):
             if p.exists():
                 p.rmdir()
+
+
+# ---------------------------------------------------------------------------
+# COMPAT(D-E4-5): services.pipeline_maker was renamed services.pipeline_editor
+# ---------------------------------------------------------------------------
+
+
+def test_service_key_prefers_the_new_name(config_dir: Path, dotenv_file: Path) -> None:
+    _write(config_dir, "services.yaml", "services:\n  pipeline_editor:\n    url: http://new:1\n")
+    assert _loader(config_dir).get_service_url("pipeline_editor") == "http://new:1"
+
+
+def test_service_key_falls_back_to_the_legacy_section_with_a_warning(
+    config_dir: Path, dotenv_file: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    _write(config_dir, "services.yaml", "services:\n  pipeline_maker:\n    url: http://old:2\n")
+    cfg = _loader(config_dir)
+    with caplog.at_level("WARNING", logger="shared.core.config_loader"):
+        assert cfg.service_key("pipeline_editor") == "pipeline_maker"
+        assert cfg.get_service_url("pipeline_editor") == "http://old:2"
+    assert any("deprecated" in r.getMessage() for r in caplog.records)
+
+
+def test_service_key_is_the_identity_for_other_services(config_dir: Path, dotenv_file: Path) -> None:
+    assert _loader(config_dir).service_key("tep_ai") == "tep_ai"
+
+
+def test_legacy_pipeline_maker_env_vars_are_still_honoured(
+    config_dir: Path, dotenv_file: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    _write(config_dir, "services.yaml", "services:\n  pipeline_editor:\n    port: ${PIPELINE_EDITOR_PORT:5005}\n")
+    monkeypatch.delenv("PIPELINE_EDITOR_PORT", raising=False)
+    monkeypatch.setenv("PIPELINE_MAKER_PORT", "6001")
+    with caplog.at_level("WARNING", logger="shared.core.config_loader"):
+        assert _loader(config_dir).get("services.pipeline_editor.port") == 6001
+    assert any("PIPELINE_MAKER_PORT is deprecated" in r.getMessage() for r in caplog.records)
+    monkeypatch.setenv("PIPELINE_EDITOR_PORT", "7002")  # the new name wins
+    assert _loader(config_dir).get("services.pipeline_editor.port") == 7002

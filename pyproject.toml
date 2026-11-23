@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tep-shared"
-version = "0.1.0"
+version = "0.2.0"
 description = "Small shared utilities: hierarchical config loading, logging, HTTP and wire helpers"
 readme = "README.md"
 license = "MIT"
